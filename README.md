@@ -7,6 +7,8 @@ Scans HTTP responses for common error codes (e.g., 403 Forbidden, 500 Internal S
 ## Usage
 `./vscan-error-code-analyzer [params]`
 
+Responses with 4xx and 5xx status codes are analyzed against the error code table and reported with their real status code. If no response is received, the tool prints a failure line and exits with status 1, with no verdict. Response headers are reported by name with their values masked.
+
 ## Parameters
 - `-h`: Show help message and exit
 - `-u`: The User-Agent string to use.

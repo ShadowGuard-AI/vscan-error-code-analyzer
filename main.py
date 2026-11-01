@@ -55,8 +55,8 @@ class VscanErrorAnalyzer:
         try:
             logging.info(f"Scanning URL: {self.url}")
             response = requests.get(self.url, headers=self.headers, timeout=self.timeout, verify=not self.ignore_ssl_errors)
-            response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
-
+            # Read the status before any raise: 4xx and 5xx responses are the
+            # input to the error_patterns table, not request failures.
             status_code = response.status_code
             logging.info(f"Received status code: {status_code}")
 
@@ -67,7 +67,7 @@ class VscanErrorAnalyzer:
                     "status_code": status_code,
                     "description": self.error_patterns[status_code],
                     "vulnerable": True,
-                    "response_headers": dict(response.headers)
+                    "response_headers": {name: "[MASKED]" for name in response.headers}
                 }
             else:
                 logging.info("No common error codes found.")
@@ -76,7 +76,7 @@ class VscanErrorAnalyzer:
                     "status_code": status_code,
                     "description": "No known vulnerability associated with this status code.",
                     "vulnerable": False,
-                    "response_headers": dict(response.headers)
+                    "response_headers": {name: "[MASKED]" for name in response.headers}
                 }
 
 
@@ -128,6 +128,10 @@ def main():
     try:
         analyzer = VscanErrorAnalyzer(args.url, args.user_agent, args.timeout, args.ignore_ssl)
         result = analyzer.scan()
+
+        if result and result.get("status_code") is None:
+            print(f"Failed to fetch {args.url}. No response was received, so no analysis was performed.")
+            sys.exit(1)
 
         if result:
             print(f"URL: {result['url']}")
