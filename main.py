@@ -5,6 +5,7 @@ from bs4 import BeautifulSoup
 import sys
 import re
 import urllib3
+# This runs at import time and silences certificate warnings for the whole process, not just for this tools requests. Anything that imports this module in a larger program loses those warnings too, even on runs where SSL errors are not being ignored.
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # Configure logging
@@ -54,10 +55,12 @@ class VscanErrorAnalyzer:
         """
         try:
             logging.info(f"Scanning URL: {self.url}")
+            # One request is the whole scan. I never send the malformed input, the odd method, or the missing file that would show how this server behaves under the conditions the table describes, I only record how it answered a normal visit.
             response = requests.get(self.url, headers=self.headers, timeout=self.timeout, verify=not self.ignore_ssl_errors)
             # Read the status before any raise: 4xx and 5xx responses are the
             # input to the error_patterns table, not request failures.
             status_code = response.status_code
+            # Requests followed any redirects to get here, so this code belongs to the final address, not necessarily the one I was given. A page that redirects to a login and answers 401 there is reported against the original URL.
             logging.info(f"Received status code: {status_code}")
 
             if status_code in self.error_patterns:
@@ -66,7 +69,9 @@ class VscanErrorAnalyzer:
                     "url": self.url,
                     "status_code": status_code,
                     "description": self.error_patterns[status_code],
+                    # Vulnerable here means only that the status is in my table. A plain 404 for a page that never existed carries the same true flag as a 500, and a 200 page with a real problem carries false, so the word is doing more work than the check behind it.
                     "vulnerable": True,
+                    # I keep the header names and throw every value away. That protects a session cookie set on an error page, and it also makes the printed header section useless for the job a reader would want it for, telling one error page from another.
                     "response_headers": {name: "[MASKED]" for name in response.headers}
                 }
             else:
@@ -129,6 +134,7 @@ def main():
         analyzer = VscanErrorAnalyzer(args.url, args.user_agent, args.timeout, args.ignore_ssl)
         result = analyzer.scan()
 
+        # Main leans on the None status to tell a fetch failure from a scanned page, because scan returns a result-shaped dict for its own errors too. Without this check a dead target would print as a finished scan that found nothing.
         if result and result.get("status_code") is None:
             print(f"Failed to fetch {args.url}. No response was received, so no analysis was performed.")
             sys.exit(1)
